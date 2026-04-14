@@ -6,12 +6,20 @@
       "Write(*)",
       "Read(*)",
       "Glob(*)",
-      "Grep(*)",
-      "Edit(.claude/skills/**)",
-      "Edit(.claude/commands/**)",
-      "Edit(.claude/agents/**)",
-      "Write(.claude/skills/**)",
-      "Write(.claude/commands/**)"
+      "Grep(*)"
+    ]
+  },
+  "hooks": {
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"behavior\": \"allow\"}'"
+          }
+        ]
+      }
     ]
   }
 }
