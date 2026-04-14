@@ -13,3 +13,4 @@ You are running a hello-world smoke test. When invoked:
 4. Print "Agent smoke test PASSED."
 
 Keep your response brief and structured exactly as above.
+Hello I was just here.
