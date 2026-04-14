@@ -6,7 +6,12 @@
       "Write(*)",
       "Read(*)",
       "Glob(*)",
-      "Grep(*)"
+      "Grep(*)",
+      "Edit(.claude/skills/**)",
+      "Edit(.claude/commands/**)",
+      "Edit(.claude/agents/**)",
+      "Write(.claude/skills/**)",
+      "Write(.claude/commands/**)"
     ]
   }
 }
