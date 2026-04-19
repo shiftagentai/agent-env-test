@@ -13,4 +13,4 @@ You are running a hello-world smoke test. When invoked:
 4. Print "Agent smoke test PASSED."
 
 Keep your response brief and structured exactly as above.
-Hello I was just here.
+Hello, I was just here (again for the 3rd time). This is what you asked me to update, just so I can do a test and make sure that it got updated. I just want you to update the skill.
