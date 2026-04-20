@@ -32,11 +32,13 @@ from intacct.queries import (
     get_bills,
     get_customers,
     get_invoices,
+    get_recent_transactions,
     get_vendors,
 )
 
 COMMANDS = {
     "test": "Validate credentials and establish a session",
+    "transactions": "Last N transactions (AP bills + AR invoices merged, sorted by WHENCREATED desc)",
     "vendors": "List vendors (--all for paginated, --since MM/DD/YYYY ignored)",
     "customers": "List customers",
     "bills": "AP bills since a given date",
@@ -54,7 +56,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=COMMANDS.keys())
     parser.add_argument("object_type", nargs="?", help="For `inspect`: Intacct object name")
-    parser.add_argument("--since", help="MM/DD/YYYY filter for bills/invoices")
+    parser.add_argument("--since", help="MM/DD/YYYY filter for bills/invoices/transactions")
+    parser.add_argument("--limit", type=int, default=10, help="Row cap for `transactions` (default 10)")
     parser.add_argument("--all", action="store_true", help="Auto-paginate through all results")
     args = parser.parse_args()
 
@@ -63,6 +66,13 @@ def main() -> int:
 
         if args.command == "test":
             print(json.dumps(client.test_connection()))
+            return 0
+
+        if args.command == "transactions":
+            rows = get_recent_transactions(
+                client, limit=args.limit, since_date=args.since,
+            )
+            _dump(rows)
             return 0
 
         if args.command == "vendors":

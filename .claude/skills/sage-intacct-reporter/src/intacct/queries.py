@@ -2,10 +2,74 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from intacct.client import IntacctClient, QueryResult
+
+
+# ---------------------------------------------------------------------------
+# Recent transactions (AP bills + AR invoices merged)
+# ---------------------------------------------------------------------------
+
+def get_recent_transactions(
+    client: IntacctClient,
+    *,
+    limit: int = 10,
+    since_date: str | None = None,
+) -> list[dict]:
+    """Merge AP bills + AR invoices, sort by WHENCREATED desc, return top `limit`.
+
+    Intacct has no single `transactions` object and `GLENTRY` is not queryable
+    via readByQuery on most tenants (fails with `DL02000001`). The practical
+    "recent transactions" view is AP bills + AR invoices combined.
+
+    Args:
+        limit: Maximum number of rows to return.
+        since_date: MM/DD/YYYY lower bound on WHENCREATED. Defaults to 30 days
+                    ago. Widen this if the 30-day window returns fewer rows
+                    than `limit`.
+
+    Returns:
+        List of dicts with normalized fields: ``type`` ("AP Bill" | "AR Invoice"),
+        ``party`` (vendor or customer name), plus the raw record fields.
+    """
+    if since_date is None:
+        since_date = (date.today() - timedelta(days=30)).strftime("%m/%d/%Y")
+
+    over_fetch = max(limit * 5, 50)
+
+    ap = client.read_by_query(
+        "APBILL",
+        query=f"WHENCREATED >= '{since_date}'",
+        fields="RECORDNO,WHENCREATED,VENDORNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE",
+        pagesize=over_fetch,
+    )
+    ar = client.read_by_query(
+        "ARINVOICE",
+        query=f"WHENCREATED >= '{since_date}'",
+        fields="RECORDNO,WHENCREATED,CUSTOMERNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE",
+        pagesize=over_fetch,
+    )
+
+    rows: list[dict] = []
+    for r in ap.records:
+        rows.append({"type": "AP Bill",    "party": r.get("VENDORNAME"),   **r})
+    for r in ar.records:
+        rows.append({"type": "AR Invoice", "party": r.get("CUSTOMERNAME"), **r})
+
+    # WHENCREATED is MM/DD/YYYY; sort by parsed date for correctness across year boundaries.
+    def _sort_key(r: dict) -> tuple[int, int, int]:
+        s = r.get("WHENCREATED") or ""
+        try:
+            mm, dd, yyyy = s.split("/")
+            return (int(yyyy), int(mm), int(dd))
+        except ValueError:
+            return (0, 0, 0)
+
+    rows.sort(key=_sort_key, reverse=True)
+    return rows[:limit]
 
 
 # ---------------------------------------------------------------------------
@@ -200,7 +264,13 @@ def get_gl_entries(
     pagesize: int = 100,
     auto_paginate: bool = False,
 ) -> QueryResult:
-    """Query GL journal entries, optionally filtered by batch date.
+    """Query GL journal entries — NOT SUPPORTED on most Intacct tenants.
+
+    WARNING: `readByQuery` against `GLENTRY` typically fails with
+    `IntacctAPIError: DL02000001`. This helper is kept only for tenants that
+    have `GLENTRY` query access explicitly enabled. For a working journal-like
+    view, use `get_recent_transactions()` (AP bills + AR invoices) or
+    `get_gl_batches()` (batch headers).
 
     Args:
         since_date: Filter entries with BATCH_DATE on or after this date (MM/DD/YYYY).
