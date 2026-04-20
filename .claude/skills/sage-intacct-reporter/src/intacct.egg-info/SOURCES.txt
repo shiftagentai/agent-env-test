@@ -1,0 +1,10 @@
+pyproject.toml
+src/intacct/__init__.py
+src/intacct/client.py
+src/intacct/queries.py
+src/intacct/secrets.py
+src/intacct.egg-info/PKG-INFO
+src/intacct.egg-info/SOURCES.txt
+src/intacct.egg-info/dependency_links.txt
+src/intacct.egg-info/requires.txt
+src/intacct.egg-info/top_level.txt
