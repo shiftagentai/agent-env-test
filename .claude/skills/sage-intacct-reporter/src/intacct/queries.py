@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -34,35 +35,7 @@ def get_recent_transactions(
         List of dicts with normalized fields: ``type`` ("AP Bill" | "AR Invoice"),
         ``party`` (vendor or customer name), plus the raw record fields.
     """
-    query = ""
-    if since_date is not None:
-        query = f"WHENCREATED >= '{since_date}'"
-    # else: Intacct doesn't need a WHERE clause when we sort server-side.
-
-    over_fetch = max(limit * 2, 20)
-
-    ap = client.read_by_query(
-        "APBILL",
-        query=query,
-        fields="RECORDNO,WHENCREATED,VENDORNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE",
-        pagesize=over_fetch,
-        orderby=[("WHENCREATED", "descending"), ("RECORDNO", "descending")],
-    )
-    ar = client.read_by_query(
-        "ARINVOICE",
-        query=query,
-        fields="RECORDNO,WHENCREATED,CUSTOMERNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE",
-        pagesize=over_fetch,
-        orderby=[("WHENCREATED", "descending"), ("RECORDNO", "descending")],
-    )
-
-    rows: list[dict] = []
-    for r in ap.records:
-        rows.append({"type": "AP Bill",    "party": r.get("VENDORNAME"),   **r})
-    for r in ar.records:
-        rows.append({"type": "AR Invoice", "party": r.get("CUSTOMERNAME"), **r})
-
-    # WHENCREATED is MM/DD/YYYY; sort by parsed date for correctness across year boundaries.
+    # WHENCREATED is MM/DD/YYYY string; parsed tuple for correct cross-year sort.
     def _sort_key(r: dict) -> tuple[int, int, int]:
         s = r.get("WHENCREATED") or ""
         try:
@@ -71,7 +44,58 @@ def get_recent_transactions(
         except ValueError:
             return (0, 0, 0)
 
-    rows.sort(key=_sort_key, reverse=True)
+    ap_fields = "RECORDNO,WHENCREATED,VENDORNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE"
+    ar_fields = "RECORDNO,WHENCREATED,CUSTOMERNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE"
+
+    # readByQuery has no server-side sort and pagesize truncates against storage
+    # (creation) order. For "most recent N", we need a window small enough that
+    # ALL matching rows fit in one page (total_count <= pagesize) — then a
+    # client-side sort gives the correct top-N. Widen until we have `limit`
+    # rows AND both result sets are complete.
+    PAGESIZE = 2000  # Intacct max
+    candidate_days = [1, 7, 30, 90, 365, 1825]
+    if since_date is not None:
+        windows: list[str | None] = [since_date]
+    else:
+        windows = [(date.today() - timedelta(days=d)).strftime("%m/%d/%Y")
+                   for d in candidate_days]
+        windows.append(None)  # final fallback: no filter at all
+
+    rows: list[dict] = []
+    last_ap_total = 0
+    last_ar_total = 0
+    for lower in windows:
+        q = f"WHENCREATED >= '{lower}'" if lower else ""
+        ap = client.read_by_query("APBILL",    query=q, fields=ap_fields, pagesize=PAGESIZE)
+        ar = client.read_by_query("ARINVOICE", query=q, fields=ar_fields, pagesize=PAGESIZE)
+        last_ap_total, last_ar_total = ap.total_count, ar.total_count
+
+        # If the window is too wide (either side truncated), the newest rows may
+        # not be in this page — stop widening here. Use the previous successful
+        # iteration's rows if we had any.
+        if ap.total_count > PAGESIZE or ar.total_count > PAGESIZE:
+            break
+
+        rows = []
+        for r in ap.records:
+            rows.append({"type": "AP Bill",    "party": r.get("VENDORNAME"),   **r})
+        for r in ar.records:
+            rows.append({"type": "AR Invoice", "party": r.get("CUSTOMERNAME"), **r})
+        rows.sort(key=_sort_key, reverse=True)
+
+        if len(rows) >= limit:
+            break
+
+    if not rows and (last_ap_total > PAGESIZE or last_ar_total > PAGESIZE):
+        # First window already too wide — the tenant is extremely dense. Surface
+        # a clear error so the caller narrows explicitly.
+        raise RuntimeError(
+            f"Tenant too dense for recent-transactions heuristic "
+            f"(AP total={last_ap_total}, AR total={last_ar_total}, pagesize={PAGESIZE}). "
+            f"Pass an explicit `since_date` narrow enough that each side has "
+            f"\u2264 {PAGESIZE} matching rows."
+        )
+
     return rows[:limit]
 
 

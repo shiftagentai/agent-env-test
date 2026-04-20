@@ -60,7 +60,6 @@ class IntacctClient:
         fields: str = "*",
         pagesize: int = 100,
         auto_paginate: bool = False,
-        orderby: list[tuple[str, str]] | None = None,
     ) -> QueryResult:
         """Query Intacct objects.
 
@@ -71,29 +70,22 @@ class IntacctClient:
             pagesize: Records per page (max 2000).
             auto_paginate: If True, follows readMore until all records fetched.
                            Defaults to False (single page).
-            orderby: Optional server-side sort as a list of ``(field, direction)``
-                     tuples where direction is ``"ascending"`` or ``"descending"``.
-                     Intacct does not sort by default — pagesize truncates against
-                     storage order — so this is required when you want the most
-                     recent N records via a single page.
+
+        Note:
+            `readByQuery` (dtdversion 3.0) does NOT support server-side sort.
+            Records come back in Intacct storage order (roughly creation order)
+            and `pagesize` truncates against that order. For "most recent N"
+            queries, use a narrow `WHENCREATED >= ...` filter and expand the
+            window if the page is underfilled — see `get_recent_transactions`.
 
         Returns:
             QueryResult with records and pagination metadata.
         """
-        orderby_xml = ""
-        if orderby:
-            orders = "".join(
-                f"<order><field>{field}</field><{direction}/></order>"
-                for field, direction in orderby
-            )
-            orderby_xml = f"<orderby>{orders}</orderby>"
-
         function_xml = (
             f"<readByQuery>"
             f"<object>{object_type}</object>"
             f"<query>{query}</query>"
             f"<fields>{fields}</fields>"
-            f"{orderby_xml}"
             f"<pagesize>{pagesize}</pagesize>"
             f"</readByQuery>"
         )
