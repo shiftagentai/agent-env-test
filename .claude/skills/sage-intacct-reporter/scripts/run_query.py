@@ -17,6 +17,14 @@ secret mounted on the agent container.
 import argparse
 import json
 import sys
+from pathlib import Path
+
+# Zero-install bootstrap: put the bundled `src/` on sys.path so `intacct.*`
+# imports work without `pip install -e .`. The `requests` dep is baked into
+# the agent-worker image.
+_SKILL_SRC = Path(__file__).resolve().parent.parent / "src"
+if str(_SKILL_SRC) not in sys.path:
+    sys.path.insert(0, str(_SKILL_SRC))
 
 from intacct.client import IntacctAPIError, IntacctClient
 from intacct.queries import (
