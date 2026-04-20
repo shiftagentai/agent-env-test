@@ -22,7 +22,7 @@ named in the caller's `secret_refs` or the platform default (`DEFAULT_AGENT_SECR
 | User asks for | Command | Notes |
 |---|---|---|
 | "test the connection" | `python3 scripts/run_query.py test` | Only does getAPISession. |
-| **"last N transactions"** | `python3 scripts/run_query.py transactions --limit N` | **This is the right answer for any phrasing of "recent activity / journal / payments / transactions".** Merges AP bills + AR invoices, sorts by WHENCREATED desc. Defaults to last 30 days — use `--since MM/DD/YYYY` to widen. |
+| **"last N transactions"** | `python3 scripts/run_query.py transactions --limit N` | **This is the right answer for any phrasing of "recent activity / journal / payments / transactions".** Merges AP bills + AR invoices, server-side orderby `WHENCREATED desc`. No date filter needed — just pass `--limit`. Use `--since MM/DD/YYYY` only if you want to bound the window. |
 | "list active vendors" | `python3 scripts/run_query.py vendors --all` | Paginates. ~6K rows on typical tenant. |
 | "list customers" | `python3 scripts/run_query.py customers --all` | |
 | "AP bills since date" | `python3 scripts/run_query.py bills --since MM/DD/YYYY` | |

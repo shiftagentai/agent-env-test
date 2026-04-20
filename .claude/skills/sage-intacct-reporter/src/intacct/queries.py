@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -27,30 +26,34 @@ def get_recent_transactions(
 
     Args:
         limit: Maximum number of rows to return.
-        since_date: MM/DD/YYYY lower bound on WHENCREATED. Defaults to 30 days
-                    ago. Widen this if the 30-day window returns fewer rows
-                    than `limit`.
+        since_date: Optional MM/DD/YYYY lower bound on WHENCREATED. If omitted,
+                    returns the most recent N across all time — Intacct sorts
+                    server-side by WHENCREATED desc before pagesize truncates.
 
     Returns:
         List of dicts with normalized fields: ``type`` ("AP Bill" | "AR Invoice"),
         ``party`` (vendor or customer name), plus the raw record fields.
     """
-    if since_date is None:
-        since_date = (date.today() - timedelta(days=30)).strftime("%m/%d/%Y")
+    query = ""
+    if since_date is not None:
+        query = f"WHENCREATED >= '{since_date}'"
+    # else: Intacct doesn't need a WHERE clause when we sort server-side.
 
-    over_fetch = max(limit * 5, 50)
+    over_fetch = max(limit * 2, 20)
 
     ap = client.read_by_query(
         "APBILL",
-        query=f"WHENCREATED >= '{since_date}'",
+        query=query,
         fields="RECORDNO,WHENCREATED,VENDORNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE",
         pagesize=over_fetch,
+        orderby=[("WHENCREATED", "descending"), ("RECORDNO", "descending")],
     )
     ar = client.read_by_query(
         "ARINVOICE",
-        query=f"WHENCREATED >= '{since_date}'",
+        query=query,
         fields="RECORDNO,WHENCREATED,CUSTOMERNAME,DESCRIPTION,TOTALENTERED,TOTALDUE,TOTALPAID,STATE",
         pagesize=over_fetch,
+        orderby=[("WHENCREATED", "descending"), ("RECORDNO", "descending")],
     )
 
     rows: list[dict] = []
