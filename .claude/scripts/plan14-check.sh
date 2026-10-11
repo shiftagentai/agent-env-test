@@ -5,4 +5,4 @@
 ctx=$(cat)
 echo "plan14-check: ${#ctx} bytes of context, run=${SHIFTAGENT_RUN_ID:-?} routine=${SHIFTAGENT_ROUTINE:-?}" >&2
 wake=$(printf '%s' "$ctx" | sed -n 's/.*"wake":\s*\(true\|false\).*/\1/p' | head -1)
-printf '{"wake": %s, "note": "from the tenant tree", "ctx_bytes": %d, "run": "%s"}\n' "${wake:-false}" "${#ctx}" "${SHIFTAGENT_RUN_ID:-}"
+printf '{"wake": %s, "note": "from the tenant tree v2", "ctx_bytes": %d, "run": "%s"}\n' "${wake:-false}" "${#ctx}" "${SHIFTAGENT_RUN_ID:-}"
